@@ -10,9 +10,17 @@ import SwiftData
 
 @main
 struct NoteaiApp: App {
-    // Initialize the AI Service (Use Mock for now)
-    // Switch to GemmaAIService() once implemented
-    @StateObject private var aiServiceWrapper = AIServiceWrapper(service: MockAIService())
+    // Initialize the AI Service
+    @StateObject private var aiServiceWrapper: AIServiceWrapper = {
+        do {
+            // Try to initialize Gemma
+            return AIServiceWrapper(service: try GemmaAIService())
+        } catch {
+            print("Failed to initialize Gemma: \(error). Falling back to mock.")
+            // Fall back to mock service if Gemma initialization fails
+            return AIServiceWrapper(service: MockAIService())
+        }
+    }()
 
     // The SwiftData model container
     var sharedModelContainer: ModelContainer = {

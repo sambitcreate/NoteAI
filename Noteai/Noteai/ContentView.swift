@@ -29,6 +29,12 @@ struct ContentView: View {
                                 Text("Title (A-Z)").tag([SortDescriptor(\Note.title)])
                                 Text("Title (Z-A)").tag([SortDescriptor(\Note.title, order: .reverse)])
                             }
+
+                            Divider()
+
+                            NavigationLink(destination: ModelSettingsView()) {
+                                Label("AI Model Settings", systemImage: "brain")
+                            }
                         } label: {
                             Label("Sort", systemImage: "arrow.up.arrow.down.circle")
                         }

@@ -60,18 +60,8 @@ struct NoteaiApp: App {
         }
 
         do {
-            // Load the appropriate service based on the model type
-            switch selectedModel.type {
-            case ModelType.gemma.rawValue:
-                // Try to initialize Gemma
-                let gemmaService = try await GemmaAIService()
-                // Update the service wrapper on the main thread
-                await MainActor.run {
-                    aiServiceWrapper.service = gemmaService
-                    print("Successfully loaded Gemma AI service")
-                }
-
-            case ModelType.qwen.rawValue:
+            // Load the Qwen service
+            if selectedModel.type == ModelType.qwen.rawValue {
                 // Try to initialize Qwen
                 let qwenService = try await QwenAIService()
                 // Update the service wrapper on the main thread
@@ -79,8 +69,7 @@ struct NoteaiApp: App {
                     aiServiceWrapper.service = qwenService
                     print("Successfully loaded Qwen AI service")
                 }
-
-            default:
+            } else {
                 print("Unknown model type: \(selectedModel.type). Using mock service.")
             }
         } catch {

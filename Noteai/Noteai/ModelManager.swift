@@ -87,41 +87,15 @@ class ModelManager: ObservableObject {
 
         // Handle different model types
         switch model.origin {
-        case .coreML:
-            // For CoreML models like Gemma
-            if model.type == ModelType.gemma.rawValue {
-                try await downloadCoreMLModel(model, destinationURL: destinationURL)
-            } else {
-                try await downloadGenericModel(model, destinationURL: destinationURL)
-            }
         case .huggingFace:
             // For GGUF models like Qwen
             try await downloadGenericModel(model, destinationURL: destinationURL)
         case .local:
             // Local models don't need downloading
             break
-        }
-    }
-
-    /// Download a CoreML model (like Gemma) with its vocabulary
-    private func downloadCoreMLModel(_ model: Model, destinationURL: URL) async throws {
-        // Download the model
-        try await downloadGenericModel(model, destinationURL: destinationURL)
-
-        // For Gemma models, also download vocabulary
-        if model.type == ModelType.gemma.rawValue {
-            // Construct vocabulary URL
-            let vocabURL = URL(string: "https://huggingface.co/google/gemma-3-1b-it/resolve/main/tokenizer.json")!
-            let vocabDestination = getDocumentsDirectory().appendingPathComponent("gemma_vocab.json")
-
-            // Download vocabulary
-            let (tempURL, _) = try await URLSession.shared.download(from: vocabURL)
-
-            // Move vocabulary file to destination
-            if FileManager.default.fileExists(atPath: vocabDestination.path) {
-                try FileManager.default.removeItem(at: vocabDestination)
-            }
-            try FileManager.default.moveItem(at: tempURL, to: vocabDestination)
+        case .coreML:
+            // CoreML models (not used anymore)
+            try await downloadGenericModel(model, destinationURL: destinationURL)
         }
     }
 
@@ -209,12 +183,6 @@ class ModelManager: ObservableObject {
         }
 
         return getModelsDirectory().appendingPathComponent(model.filename)
-    }
-
-    /// Get the vocabulary path for a model
-    func getVocabPath() -> String? {
-        let vocabPath = getDocumentsDirectory().appendingPathComponent("gemma_vocab.json").path
-        return FileManager.default.fileExists(atPath: vocabPath) ? vocabPath : nil
     }
 
     /// Cancel a model download

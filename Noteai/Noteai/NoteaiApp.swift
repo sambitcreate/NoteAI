@@ -11,16 +11,10 @@ import SwiftData
 @main
 struct NoteaiApp: App {
     // Initialize the AI Service
-    @StateObject private var aiServiceWrapper: AIServiceWrapper = {
-        do {
-            // Try to initialize Gemma
-            return AIServiceWrapper(service: try GemmaAIService())
-        } catch {
-            print("Failed to initialize Gemma: \(error). Falling back to mock.")
-            // Fall back to mock service if Gemma initialization fails
-            return AIServiceWrapper(service: MockAIService())
-        }
-    }()
+    @StateObject private var aiServiceWrapper = AIServiceWrapper(service: MockAIService())
+
+    // Flag to track if we've attempted to load Gemma
+    @State private var hasAttemptedGemmaLoad = false
 
     // The SwiftData model container
     var sharedModelContainer: ModelContainer = {
@@ -42,7 +36,29 @@ struct NoteaiApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(aiServiceWrapper) // Provide AI service to the environment
+                .task {
+                    if !hasAttemptedGemmaLoad {
+                        hasAttemptedGemmaLoad = true
+                        await loadGemmaService()
+                    }
+                }
         }
         .modelContainer(sharedModelContainer) // Provide ModelContainer to the environment
+    }
+
+    /// Attempt to load the Gemma service
+    private func loadGemmaService() async {
+        do {
+            // Try to initialize Gemma
+            let gemmaService = try await GemmaAIService()
+            // Update the service wrapper on the main thread
+            await MainActor.run {
+                aiServiceWrapper.service = gemmaService
+                print("Successfully loaded Gemma AI service")
+            }
+        } catch {
+            print("Failed to initialize Gemma: \(error). Using mock service.")
+            // We're already using the mock service as default
+        }
     }
 }

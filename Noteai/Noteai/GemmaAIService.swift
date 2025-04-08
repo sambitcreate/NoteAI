@@ -1,5 +1,5 @@
 import Foundation
-import TensorFlowLite
+import Combine
 
 final class GemmaAIService: AIService {
     // MARK: - Properties
@@ -13,12 +13,8 @@ final class GemmaAIService: AIService {
         case timeout
     }
 
-    private let modelPath: String
-    private var interpreter: Interpreter?
-    private let tokenizer: GemmaTokenizer
-
-    private let maxInputLength = 2048
-    private let maxOutputLength = 512
+    // The Gemma model
+    private let gemmaModel = GemmaModel.shared
 
     // For progress tracking
     @Published var inferenceProgress: Double = 0.0
@@ -28,40 +24,16 @@ final class GemmaAIService: AIService {
 
     // MARK: - Initialization
 
-    init() throws {
-        // Use ModelManager to get model paths
-        let modelManager = ModelManager()
+    init() async throws {
+        // Check if model is available
+        let isModelAvailable = await gemmaModel.isModelDownloaded()
 
-        // 1. Check if model is downloaded
-        guard let modelPath = modelManager.getModelPath() else {
+        if !isModelAvailable {
             throw GemmaError.modelNotFound
         }
 
-        self.modelPath = modelPath
-
-        // 2. Initialize tokenizer
-        do {
-            // Try to use the downloaded vocabulary file
-            if let vocabPath = modelManager.getVocabPath() {
-                self.tokenizer = try GemmaTokenizer(vocabPath: vocabPath)
-            } else {
-                // Fall back to the sample vocabulary in the bundle
-                guard let bundleVocabPath = Bundle.main.path(forResource: "gemma_vocab_sample", ofType: "json") else {
-                    throw GemmaError.tokenizationError
-                }
-                self.tokenizer = try GemmaTokenizer(vocabPath: bundleVocabPath)
-            }
-        } catch {
-            throw GemmaError.tokenizationError
-        }
-
-        // 3. Initialize TensorFlow Lite interpreter
-        do {
-            self.interpreter = try Interpreter(modelPath: modelPath)
-            try interpreter?.allocateTensors()
-        } catch {
-            throw GemmaError.initializationFailed
-        }
+        // Load the model
+        try await gemmaModel.loadModel()
     }
 
     // MARK: - Private Methods
@@ -72,101 +44,23 @@ final class GemmaAIService: AIService {
             return cachedResponse
         }
 
-        // 1. Tokenize input
-        guard let inputIds = try? tokenizer.encode(text: prompt) else {
-            throw GemmaError.tokenizationError
-        }
+        // Update progress
+        updateProgress(0.1)
 
-        // 2. Check if input is too long
-        if inputIds.count > maxInputLength {
-            throw GemmaError.inputTooLong
-        }
+        // Generate text using GemmaModel
+        let response = try await gemmaModel.generateText(
+            prompt: prompt,
+            temperature: 0.7,
+            maxNewTokens: maxTokens
+        )
 
-        // 3. Prepare input tensor
-        let inputTensor = try prepareInputTensor(inputIds: inputIds)
+        // Cache the result
+        responseCache[prompt] = response
 
-        // 4. Run inference with timeout
-        return try await generateWithTimeout(inputTensor: inputTensor, maxTokens: maxTokens)
-    }
+        // Update progress
+        updateProgress(1.0)
 
-    private func generateWithTimeout(inputTensor: Data, maxTokens: Int, timeout: TimeInterval = 30) async throws -> String {
-        return try await withThrowingTaskGroup(of: String.self) { group in
-            // Start generation task
-            group.addTask {
-                return try await self.runInference(inputTensor: inputTensor, maxTokens: maxTokens)
-            }
-
-            // Start timeout task
-            group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                throw GemmaError.timeout
-            }
-
-            // Return first completed task result
-            let result = try await group.next()!
-            group.cancelAll()
-            return result
-        }
-    }
-
-    private func runInference(inputTensor: Data, maxTokens: Int) async throws -> String {
-        return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    // Set input tensor
-                    try self.interpreter?.copy(inputTensor, toInputAt: 0)
-
-                    // Run inference
-                    try self.interpreter?.invoke()
-
-                    // Get output tensor
-                    let outputTensor = try self.interpreter?.output(at: 0)
-                    let outputIds = self.processOutputTensor(outputTensor)
-
-                    // Decode output
-                    let result = self.tokenizer.decode(tokens: outputIds)
-
-                    // Cache the result
-                    self.responseCache[String(data: inputTensor, encoding: .utf8) ?? ""] = result
-
-                    // Return result on main thread
-                    DispatchQueue.main.async {
-                        continuation.resume(returning: result)
-                    }
-                } catch {
-                    DispatchQueue.main.async {
-                        continuation.resume(throwing: GemmaError.inferenceError(error.localizedDescription))
-                    }
-                }
-            }
-        }
-    }
-
-    private func prepareInputTensor(inputIds: [Int32]) throws -> Data {
-        // Convert input IDs to tensor data
-        var inputData = Data(capacity: inputIds.count * MemoryLayout<Int32>.size)
-        for id in inputIds {
-            var value = id
-            inputData.append(Data(bytes: &value, count: MemoryLayout<Int32>.size))
-        }
-        return inputData
-    }
-
-    private func processOutputTensor(_ tensor: Tensor?) -> [Int32] {
-        // Process output tensor to get token IDs
-        guard let tensor = tensor else { return [] }
-
-        // This is a placeholder implementation
-        // The actual implementation depends on the model's output format
-        let byteCount = tensor.data.count
-        let count = byteCount / MemoryLayout<Int32>.size
-        var outputIds = [Int32](repeating: 0, count: count)
-
-        _ = outputIds.withUnsafeMutableBytes { outputBytes in
-            tensor.data.copyBytes(to: outputBytes)
-        }
-
-        return outputIds
+        return response
     }
 
     private func updateProgress(_ progress: Double) {

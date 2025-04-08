@@ -382,7 +382,7 @@ extension CreateNoteView: AudioRecordingDelegate {
 
         return CreateNoteView()
             .modelContainer(container)
-            .environmentObject(AIServiceWrapper(service: MockAIService()))
+            .environmentObject(Noteai.AIServiceWrapper(service: MockAIService()))
     }
 
     return previewContent()

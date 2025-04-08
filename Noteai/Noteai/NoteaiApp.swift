@@ -11,7 +11,7 @@ import SwiftData
 @main
 struct NoteaiApp: App {
     // Initialize the AI Service
-    @StateObject private var aiServiceWrapper = AIServiceWrapper(service: MockAIService())
+    @StateObject private var aiServiceWrapper = Noteai.AIServiceWrapper(service: MockAIService())
 
     // Initialize the Model Manager
     @StateObject private var modelManager = ModelManager()

@@ -47,7 +47,7 @@ class MockAIService: AIService {
          if text.isEmpty { return ["general"] }
          return ["mock-category", "ai-generated", "example"]
     }
-    
+
     func generateFlashcards(text: String, count: Int) async throws -> [(front: String, back: String)] {
         print("🤖 MockAIService: Generating \(count) flashcards...")
         try await Task.sleep(nanoseconds: 1_200_000_000)
@@ -98,7 +98,7 @@ class GemmaAIService: AIService {
          print("⚠️ GemmaAIService: categorize called - returning placeholder.")
          return ["gemma-placeholder-tag"]
     }
-    
+
     func generateFlashcards(text: String, count: Int) async throws -> [(front: String, back: String)] {
         // TODO: Implement actual Gemma flashcard generation
         print("⚠️ GemmaAIService: generateFlashcards called - returning placeholder.")
@@ -106,11 +106,3 @@ class GemmaAIService: AIService {
     }
 }
 
-// Simple wrapper to make AIService usable with @StateObject / @EnvironmentObject
-class AIServiceWrapper: ObservableObject {
-    @Published var service: AIService
-    
-    init(service: AIService) {
-        self.service = service
-    }
-}

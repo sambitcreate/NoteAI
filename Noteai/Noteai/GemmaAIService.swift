@@ -36,6 +36,13 @@ final class GemmaAIService: AIService {
         try await gemmaModel.loadModel()
     }
 
+    // Synchronous initializer for backward compatibility
+    init() {
+        // This initializer is needed for compatibility with existing code
+        // It doesn't actually load the model - that will happen asynchronously later
+        print("Warning: Using synchronous initializer for GemmaAIService. Model will not be loaded.")
+    }
+
     // MARK: - Private Methods
 
     private func generate(prompt: String, maxTokens: Int = 256) async throws -> String {

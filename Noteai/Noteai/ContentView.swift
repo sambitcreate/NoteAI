@@ -73,7 +73,7 @@ struct ContentView: View {
 
         return ContentView()
             .modelContainer(container)
-            .environmentObject(AIServiceWrapper(service: MockAIService()))
+            .environmentObject(Noteai.AIServiceWrapper(service: MockAIService()))
     }
 
     return previewContent()

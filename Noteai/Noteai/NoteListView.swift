@@ -100,7 +100,7 @@ struct NoteRow: View {
             NoteListView()
         }
         .modelContainer(container)
-        .environmentObject(AIServiceWrapper(service: MockAIService()))
+        .environmentObject(Noteai.AIServiceWrapper(service: MockAIService()))
     }
 
     return previewContent()

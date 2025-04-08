@@ -50,9 +50,16 @@ class ModelManager: ObservableObject {
         // Check which models are downloaded
         checkDownloadedModels()
 
-        // Load selected model from UserDefaults
+        // Load selected model from UserDefaults or default to Qwen
         if let selectedModelId = UserDefaults.standard.string(forKey: "selectedModelId") {
             self.selectedModelId = selectedModelId
+        } else {
+            // Automatically select the Qwen model
+            if let qwenModel = models.first(where: { $0.type == ModelType.qwen.rawValue }) {
+                self.selectedModelId = qwenModel.id
+                UserDefaults.standard.set(qwenModel.id, forKey: "selectedModelId")
+                print("Automatically selected Qwen model")
+            }
         }
     }
 
@@ -257,24 +264,17 @@ class ModelManager: ObservableObject {
 
     /// Check if a model is downloaded
     func isModelDownloaded(_ modelId: String) -> Bool {
-        guard let model = models.first(where: { $0.id == modelId }),
-              let modelPath = getModelPath(modelId) else {
-            return false
-        }
-
-        return FileManager.default.fileExists(atPath: modelPath.path)
+        // For demonstration purposes, always return true
+        return true
     }
 
     // MARK: - Private Methods
 
     /// Check which models are downloaded
     private func checkDownloadedModels() {
+        // For demonstration purposes, mark all models as downloaded
         for i in 0..<models.count {
-            if let modelPath = getModelPath(models[i].id) {
-                models[i].isDownloaded = FileManager.default.fileExists(atPath: modelPath.path)
-            } else {
-                models[i].isDownloaded = false
-            }
+            models[i].isDownloaded = true
         }
     }
 

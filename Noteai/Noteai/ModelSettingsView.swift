@@ -1,35 +1,35 @@
 import SwiftUI
 
 struct ModelSettingsView: View {
-    @StateObject private var modelManager = ModelManager()
+    @EnvironmentObject private var modelManager: ModelManager
     @State private var showingAlert = false
     @State private var alertMessage = ""
-    
+
     var body: some View {
         List {
-            Section(header: Text("Gemma Model")) {
-                VStack(alignment: .leading) {
-                    Text("Gemma 3B-4B")
-                        .font(.headline)
-                    
-                    Text("On-device AI model for note processing")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    modelStateView()
-                        .padding(.top, 8)
+            Section(header: Text("AI Models")) {
+                NavigationLink(destination: ModelSelectionView()) {
+                    HStack {
+                        Text("Select AI Model")
+                        Spacer()
+                        Text(selectedModelName())
+                            .foregroundColor(.secondary)
+                    }
                 }
-                .padding(.vertical, 8)
             }
-            
+
             Section(header: Text("Model Settings")) {
-                Toggle("Use Gemma for AI features", isOn: .constant(true))
-                    .disabled(modelManager.modelState != .downloaded)
-                
+                Toggle("Auto-load model on startup", isOn: .constant(true))
+
                 Button {
                     Task {
                         do {
-                            try await modelManager.downloadModelIfNeeded()
+                            if let selectedModelId = modelManager.selectedModelId {
+                                try await modelManager.downloadModel(selectedModelId)
+                            } else {
+                                alertMessage = "No model selected"
+                                showingAlert = true
+                            }
                         } catch {
                             alertMessage = "Failed to download model: \(error.localizedDescription)"
                             showingAlert = true
@@ -37,62 +37,63 @@ struct ModelSettingsView: View {
                     }
                 } label: {
                     HStack {
-                        Text(downloadButtonText())
+                        Text("Download Selected Model")
                         Spacer()
-                        Image(systemName: downloadButtonIcon())
+                        Image(systemName: "arrow.down.circle")
                     }
                 }
-                .disabled(isDownloadButtonDisabled())
-                
-                if case .downloading = modelManager.modelState {
-                    Button(role: .destructive) {
-                        modelManager.cancelDownload()
-                    } label: {
-                        HStack {
-                            Text("Cancel Download")
-                            Spacer()
-                            Image(systemName: "xmark.circle")
-                        }
-                    }
-                }
+                .disabled(modelManager.selectedModelId == nil)
             }
-            
+
             Section(header: Text("Storage")) {
                 HStack {
-                    Text("Model Size")
+                    Text("Storage Location")
                     Spacer()
-                    Text("~1.5 GB")
+                    Text("Documents/models")
                         .foregroundColor(.secondary)
                 }
-                
-                Button(role: .destructive) {
-                    // TODO: Implement model deletion
-                    alertMessage = "Model deleted successfully"
-                    showingAlert = true
+
+                Button {
+                    Task {
+                        do {
+                            try await checkStorageSpace()
+                        } catch {
+                            alertMessage = error.localizedDescription
+                            showingAlert = true
+                        }
+                    }
                 } label: {
                     HStack {
-                        Text("Delete Model")
+                        Text("Check Storage Space")
+                        Spacer()
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+
+                Button(role: .destructive) {
+                    Task {
+                        do {
+                            if let selectedModelId = modelManager.selectedModelId {
+                                try modelManager.deleteModel(selectedModelId)
+                                alertMessage = "Model deleted successfully"
+                                showingAlert = true
+                            } else {
+                                alertMessage = "No model selected"
+                                showingAlert = true
+                            }
+                        } catch {
+                            alertMessage = "Failed to delete model: \(error.localizedDescription)"
+                            showingAlert = true
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Text("Delete Selected Model")
                         Spacer()
                         Image(systemName: "trash")
                     }
                 }
-                .disabled(modelManager.modelState != .downloaded)
-            }
-            
-            Section(header: Text("Performance")) {
-                HStack {
-                    Text("Inference Speed")
-                    Spacer()
-                    Text("Standard")
-                        .foregroundColor(.secondary)
-                }
-                
-                HStack {
-                    Text("Memory Usage")
-                    Spacer()
-                    Text("High")
-                        .foregroundColor(.secondary)
-                }
+                .disabled(modelManager.selectedModelId == nil)
             }
         }
         .navigationTitle("AI Model Settings")
@@ -102,77 +103,30 @@ struct ModelSettingsView: View {
             Text(alertMessage)
         }
     }
-    
-    @ViewBuilder
-    private func modelStateView() -> some View {
-        switch modelManager.modelState {
-        case .notDownloaded:
-            Text("Not Downloaded")
-                .foregroundColor(.red)
-                .font(.subheadline)
-            
-        case .downloading(let progress):
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Downloading...")
-                    .foregroundColor(.blue)
-                    .font(.subheadline)
-                
-                ProgressView(value: progress)
-                    .progressViewStyle(LinearProgressViewStyle())
-                
-                Text("\(Int(progress * 100))%")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+
+    /// Get the name of the selected model
+    private func selectedModelName() -> String {
+        if let selectedModelId = modelManager.selectedModelId,
+           let selectedModel = modelManager.models.first(where: { $0.id == selectedModelId }) {
+            return selectedModel.name
+        }
+        return "None"
+    }
+
+    /// Check available storage space
+    private func checkStorageSpace() async throws {
+        let fileManager = FileManager.default
+        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+
+        do {
+            let values = try documentsURL.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+            if let availableCapacity = values.volumeAvailableCapacityForImportantUsage {
+                let availableGB = Double(availableCapacity) / 1_000_000_000
+                alertMessage = "Available storage: \(String(format: "%.2f", availableGB)) GB"
+                showingAlert = true
             }
-            
-        case .downloaded:
-            Text("Downloaded")
-                .foregroundColor(.green)
-                .font(.subheadline)
-            
-        case .error(let message):
-            VStack(alignment: .leading) {
-                Text("Error")
-                    .foregroundColor(.red)
-                    .font(.subheadline)
-                
-                Text(message)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
+        } catch {
+            throw error
         }
-    }
-    
-    private func downloadButtonText() -> String {
-        switch modelManager.modelState {
-        case .notDownloaded:
-            return "Download Model"
-        case .downloading:
-            return "Downloading..."
-        case .downloaded:
-            return "Re-Download Model"
-        case .error:
-            return "Retry Download"
-        }
-    }
-    
-    private func downloadButtonIcon() -> String {
-        switch modelManager.modelState {
-        case .notDownloaded:
-            return "arrow.down.circle"
-        case .downloading:
-            return "hourglass"
-        case .downloaded:
-            return "arrow.down.circle"
-        case .error:
-            return "arrow.clockwise"
-        }
-    }
-    
-    private func isDownloadButtonDisabled() -> Bool {
-        if case .downloading = modelManager.modelState {
-            return true
-        }
-        return false
     }
 }
